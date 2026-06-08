@@ -3,31 +3,230 @@
 @tailwind utilities;
 
 :root {
-  --foreground-rgb: 0, 0, 0;
-  --background-start-rgb: 214, 219, 220;
-  --background-end-rgb: 255, 255, 255;
+  /* Canvas */
+  --canvas: #010102;           /* Near-black base — the app floor */
+  --surface-1: #0f1011;        /* Cards, panels */
+  --surface-2: #141516;        /* Featured cards, hovered states */
+  --surface-3: #18191a;        /* Dropdowns, sub-nav */
+  --surface-4: #191a1b;        /* Deepest nested element */
+
+  /* Accent */
+  --primary: #5e6ad2;          /* Lavender — brand mark, CTA, focus ring */
+  --primary-hover: #828fff;    /* Lighter lavender on hover */
+  --primary-focus: #5e69d1;    /* Pressed/active state */
+
+  /* Text */
+  --ink: #f7f8f8;              /* Primary text */
+  --ink-muted: #d0d6e0;        /* Muted text */
+  --ink-subtle: #8a8f98;       /* Subtle, placeholder */
+  --ink-tertiary: #62666d;     /* Disabled, footnotes */
+
+  /* Borders */
+  --hairline: #23252a;         /* Default card borders */
+  --hairline-strong: #34343a;  /* Elevated card borders */
+  --hairline-tertiary: #3e3e44; /* Strong borders */
+
+  /* Semantic */
+  --success: #27a644;
+  --warning: #d97706;
+  --error: #dc2626;
+  --brand-secure: #7a7fad;
+
+  /* Status Pipeline Colors */
+  --status-registered: #5e6ad2;
+  --status-medical: #0ea5e9;
+  --status-lmis: #a855f7;
+  --status-musaned: #f59e0b;
+  --status-enjaz: #10b981;
+  --status-flight: #27a644;
+
+  /* Font Families */
+  --font-display: 'Inter', -apple-system, system-ui, sans-serif;
+  --font-body: 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --foreground-rgb: 255, 255, 255;
-    --background-start-rgb: 0, 0, 0;
-    --background-end-rgb: 0, 0, 0;
-  }
+.light {
+  --canvas: #f7f8fb;
+  --surface-1: #ffffff;
+  --surface-2: #f0f2f7;
+  --surface-3: #e6e9f0;
+  --surface-4: #dfe3ec;
+
+  --primary: #4f46e5;
+  --primary-hover: #4338ca;
+  --primary-focus: #3730a3;
+
+  --ink: #111827;
+  --ink-muted: #374151;
+  --ink-subtle: #6b7280;
+  --ink-tertiary: #9ca3af;
+
+  --hairline: #d8dce6;
+  --hairline-strong: #b7bfce;
+  --hairline-tertiary: #9aa3b5;
+
+  --success: #15803d;
+  --warning: #b45309;
+  --error: #b91c1c;
+  --brand-secure: #575db3;
 }
 
 body {
-  color: rgb(var(--foreground-rgb));
-  background: linear-gradient(
-      to bottom,
-      transparent,
-      rgb(var(--background-end-rgb))
-    )
-    rgb(var(--background-start-rgb));
+  background-color: var(--canvas);
+  color: var(--ink);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-@layer utilities {
-  .text-balance {
-    text-wrap: balance;
-  }
+/* Custom scrollbars for the dark canvas */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: var(--canvas);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--surface-2);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--surface-3);
+}
+
+/* High-fidelity display typography classes with negative tracking */
+.text-display-xl {
+  font-family: var(--font-display);
+  font-size: 80px;
+  font-weight: 600;
+  line-height: 1.05;
+  letter-spacing: -3.0px;
+}
+
+.text-display-lg {
+  font-family: var(--font-display);
+  font-size: 56px;
+  font-weight: 600;
+  line-height: 1.10;
+  letter-spacing: -1.8px;
+}
+
+.text-display-md {
+  font-family: var(--font-display);
+  font-size: 40px;
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -1.0px;
+}
+
+.text-headline {
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 1.20;
+  letter-spacing: -0.6px;
+}
+
+.text-card-title {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 500;
+  line-height: 1.25;
+  letter-spacing: -0.4px;
+}
+
+.text-eyebrow {
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.30;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+
+/* Custom button classes to map exact tokens from DESIGN (2).md */
+.btn-primary {
+  background-color: var(--primary);
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.20;
+  padding: 8px 14px;
+  border-radius: 8px;
+  transition: background-color 0.15s ease-in-out;
+}
+.btn-primary:hover {
+  background-color: var(--primary-hover);
+}
+.btn-primary:active {
+  background-color: var(--primary-focus);
+}
+
+.btn-secondary {
+  background-color: var(--surface-1);
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.20;
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--hairline);
+  transition: border-color 0.15s ease-in-out, background-color 0.15s ease-in-out;
+}
+.btn-secondary:hover {
+  background-color: var(--surface-2);
+  border-color: var(--hairline-strong);
+}
+
+.btn-tertiary {
+  background-color: var(--canvas);
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.20;
+  padding: 8px 14px;
+  border-radius: 8px;
+  transition: background-color 0.15s ease-in-out;
+}
+.btn-tertiary:hover {
+  background-color: var(--surface-1);
+}
+
+.btn-inverse {
+  background-color: #ffffff;
+  color: #000000;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.20;
+  padding: 8px 14px;
+  border-radius: 8px;
+  transition: opacity 0.15s ease-in-out;
+}
+.btn-inverse:hover {
+  opacity: 0.9;
+}
+
+/* Custom form elements matching design guidelines */
+.input-text {
+  background-color: var(--surface-1);
+  color: var(--ink);
+  font-size: 16px;
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  padding: 8px 12px;
+  transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+}
+.input-text:focus {
+  outline: none;
+  border-color: var(--hairline-strong);
+  box-shadow: 0 0 0 2px rgba(94, 105, 209, 0.5);
+}
+
+/* Pipeline styles */
+.kanban-column {
+  background-color: var(--surface-1);
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
 }

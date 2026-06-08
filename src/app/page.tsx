@@ -1,113 +1,117 @@
-import Image from "next/image";
+"use client";
+
+import Link from "next/link";
+import { ArrowRight, Cpu, FileBadge, ShieldCheck, Zap } from "lucide-react";
+import { LanguageSwitcher, useCurrentLocale } from "@/components/sira/LanguageSwitcher";
+import { ThemeToggle } from "@/components/sira/ThemeToggle";
+import { getDictionary, withLocale } from "@/lib/i18n";
 
 export default function Home() {
+  const locale = useCurrentLocale();
+  const t = getDictionary(locale);
+
   return (
-    <main className="flex min-h-screen flex-col items-center justify-between p-24">
-      <div className="z-10 w-full max-w-5xl items-center justify-between font-mono text-sm lg:flex">
-        <p className="fixed left-0 top-0 flex w-full justify-center border-b border-gray-300 bg-gradient-to-b from-zinc-200 pb-6 pt-8 backdrop-blur-2xl dark:border-neutral-800 dark:bg-zinc-800/30 dark:from-inherit lg:static lg:w-auto  lg:rounded-xl lg:border lg:bg-gray-200 lg:p-4 lg:dark:bg-zinc-800/30">
-          Get started by editing&nbsp;
-          <code className="font-mono font-bold">src/app/page.tsx</code>
-        </p>
-        <div className="fixed bottom-0 left-0 flex h-48 w-full items-end justify-center bg-gradient-to-t from-white via-white dark:from-black dark:via-black lg:static lg:size-auto lg:bg-none">
-          <a
-            className="pointer-events-none flex place-items-center gap-2 p-8 lg:pointer-events-auto lg:p-0"
-            href="https://vercel.com?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            By{" "}
-            <Image
-              src="/vercel.svg"
-              alt="Vercel Logo"
-              className="dark:invert"
-              width={100}
-              height={24}
-              priority
-            />
-          </a>
+    <div className="min-h-screen bg-canvas text-ink flex flex-col relative overflow-hidden">
+      {/* Background grid */}
+      <div
+        className="absolute inset-0 opacity-[0.03] pointer-events-none"
+        style={{
+          backgroundImage:
+            "linear-gradient(#5e6ad2 1px, transparent 1px), linear-gradient(90deg, #5e6ad2 1px, transparent 1px)",
+          backgroundSize: "64px 64px",
+        }}
+      />
+
+      {/* Decorative gradient blur */}
+      <div className="absolute top-[-20%] left-[50%] -translate-x-1/2 w-[600px] h-[600px] bg-[#5e6ad2]/10 rounded-full blur-[120px] pointer-events-none" />
+
+      {/* Navigation Header */}
+      <header className="relative z-10 w-full max-w-7xl mx-auto h-20 px-6 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <span className="w-10 h-10 rounded-lg bg-[#5e6ad2]/10 border border-[#5e6ad2]/30 flex items-center justify-center font-bold text-[#828fff] text-xl font-display">
+            ሥ
+          </span>
+          <span className="font-bold text-xl tracking-widest text-ink font-display">SIRA</span>
         </div>
-      </div>
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+            <LanguageSwitcher />
+          </div>
+          <Link href={withLocale("/login", locale)} className="text-sm font-medium text-ink-subtle hover:text-ink transition">
+            {t.landing.signIn}
+          </Link>
+          <Link href={withLocale("/register", locale)} className="btn-primary py-2 px-4 text-xs font-semibold">
+            {t.landing.getStarted}
+          </Link>
+        </div>
+      </header>
 
-      <div className="relative z-[-1] flex place-items-center before:absolute before:h-[300px] before:w-full before:-translate-x-1/2 before:rounded-full before:bg-gradient-radial before:from-white before:to-transparent before:blur-2xl before:content-[''] after:absolute after:-z-20 after:h-[180px] after:w-full after:translate-x-1/3 after:bg-gradient-conic after:from-sky-200 after:via-blue-200 after:blur-2xl after:content-[''] before:dark:bg-gradient-to-br before:dark:from-transparent before:dark:to-blue-700 before:dark:opacity-10 after:dark:from-sky-900 after:dark:via-[#0141ff] after:dark:opacity-40 sm:before:w-[480px] sm:after:w-[240px] before:lg:h-[360px]">
-        <Image
-          className="relative dark:drop-shadow-[0_0_0.3rem_#ffffff70] dark:invert"
-          src="/next.svg"
-          alt="Next.js Logo"
-          width={180}
-          height={37}
-          priority
-        />
-      </div>
+      {/* Hero Section */}
+      <main className="relative z-10 flex-1 max-w-7xl mx-auto px-6 flex flex-col items-center justify-center text-center py-20">
+        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#5e6ad2]/10 border border-[#5e6ad2]/20 text-[11px] text-[#828fff] font-medium tracking-wide mb-6 uppercase">
+          <Zap className="w-3.5 h-3.5 animate-pulse" />
+          {t.landing.heroTagline}
+        </div>
 
-      <div className="mb-32 grid text-center lg:mb-0 lg:w-full lg:max-w-5xl lg:grid-cols-4 lg:text-left">
-        <a
-          href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className="mb-3 text-2xl font-semibold">
-            Docs{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className="m-0 max-w-[30ch] text-sm opacity-50">
-            Find in-depth information about Next.js features and API.
-          </p>
-        </a>
+        <h1 className="text-4xl md:text-6xl font-bold tracking-tight text-ink max-w-3xl leading-[1.1] font-display">
+          {t.landing.heroTitlePart1}<span className="bg-gradient-to-r from-[#828fff] to-[#5e6ad2] bg-clip-text text-transparent">{t.landing.heroTitlePart2}</span>.
+        </h1>
 
-        <a
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className="mb-3 text-2xl font-semibold">
-            Learn{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className="m-0 max-w-[30ch] text-sm opacity-50">
-            Learn about Next.js in an interactive course with&nbsp;quizzes!
-          </p>
-        </a>
+        <p className="mt-6 text-sm md:text-base text-ink-subtle max-w-xl leading-relaxed">
+          {t.landing.heroSubtitle}
+        </p>
 
-        <a
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className="mb-3 text-2xl font-semibold">
-            Templates{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className="m-0 max-w-[30ch] text-sm opacity-50">
-            Explore starter templates for Next.js.
-          </p>
-        </a>
+        <div className="mt-10 flex flex-col sm:flex-row gap-4 justify-center w-full max-w-xs sm:max-w-none">
+          <Link href={withLocale("/register", locale)} className="btn-primary py-3 px-6 text-sm font-semibold flex items-center justify-center gap-2">
+            {t.landing.registerAgency}
+            <ArrowRight className="w-4 h-4" />
+          </Link>
+          <Link href={withLocale("/login", locale)} className="btn-secondary py-3 px-6 text-sm font-semibold flex items-center justify-center border border-hairline hover:border-hairline-strong transition">
+            {t.landing.agencySignIn}
+          </Link>
+        </div>
 
-        <a
-          href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className="mb-3 text-2xl font-semibold">
-            Deploy{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className="m-0 max-w-[30ch] text-balance text-sm opacity-50">
-            Instantly deploy your Next.js site to a shareable URL with Vercel.
-          </p>
-        </a>
-      </div>
-    </main>
+        {/* Feature Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-5xl mt-24">
+          {[
+            {
+              icon: FileBadge,
+              title: t.landing.featureOcrTitle,
+              desc: t.landing.featureOcrDesc,
+            },
+            {
+              icon: Cpu,
+              title: t.landing.featureSyncTitle,
+              desc: t.landing.featureSyncDesc,
+            },
+            {
+              icon: ShieldCheck,
+              title: t.landing.featureVaultTitle,
+              desc: t.landing.featureVaultDesc,
+            },
+          ].map((feat, idx) => (
+            <div key={idx} className="bg-surface-1 border border-hairline rounded-xl p-6 text-left hover:border-hairline-strong transition-all">
+              <div className="w-10 h-10 rounded-lg bg-[#5e6ad2]/10 border border-[#5e6ad2]/20 flex items-center justify-center text-primary mb-4">
+                <feat.icon className="w-5 h-5" />
+              </div>
+              <h3 className="text-base font-semibold text-ink mb-2">{feat.title}</h3>
+              <p className="text-xs text-ink-subtle leading-relaxed">{feat.desc}</p>
+            </div>
+          ))}
+        </div>
+      </main>
+
+      {/* Footer */}
+      <footer className="relative z-10 w-full max-w-7xl mx-auto h-auto py-6 px-6 border-t border-hairline flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-ink-tertiary">
+        <span>&copy; {new Date().getFullYear()} SIRA (ሥራ) Platform. All rights reserved.</span>
+        <div className="flex gap-4">
+          <Link href={withLocale("/terms", locale)} className="hover:text-ink transition">{t.static.terms}</Link>
+          <Link href={withLocale("/privacy", locale)} className="hover:text-ink transition">{t.static.privacy}</Link>
+          <Link href={withLocale("/cookies", locale)} className="hover:text-ink transition">{t.static.cookies}</Link>
+          <Link href={withLocale("/contact", locale)} className="hover:text-ink transition">{t.static.contact}</Link>
+        </div>
+      </footer>
+    </div>
   );
 }

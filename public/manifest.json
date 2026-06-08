@@ -1,0 +1,26 @@
+{
+  "name": "SIRA — ሥራ AI Overseas Recruitment",
+  "short_name": "SIRA",
+  "description": "AI-powered Ethiopian recruitment platform: OCR passport scan, Kanban management, LMIS & Musaned automation.",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "background_color": "#010102",
+  "theme_color": "#5e6ad2",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ],
+  "categories": [
+    "business",
+    "productivity"
+  ]
+}
