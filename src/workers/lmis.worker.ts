@@ -79,19 +79,28 @@ async function updateJobStatus(
 }
 
 async function loginToLmis(page: Page, credentials: { username: string; password: string }, baseUrl: string): Promise<boolean> {
-  try {
-    await page.goto(`${baseUrl}/login`, { waitUntil: "domcontentloaded", timeout: 30_000 });
-    await page.fill('input[name="username"], input[type="email"]', credentials.username);
-    await page.fill('input[name="password"], input[type="password"]', credentials.password);
-    await page.click('button[type="submit"], input[type="submit"]');
+  const maxRetries = 3;
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      await page.goto(`${baseUrl}/login`, { waitUntil: "domcontentloaded", timeout: 30_000 });
+      await page.fill('input[name="username"], input[type="email"]', credentials.username);
+      await page.fill('input[name="password"], input[type="password"]', credentials.password);
+      await page.click('button[type="submit"], input[type="submit"]');
 
-    // Wait for navigation to confirm login success
-    await page.waitForURL(/dashboard|home|index/, { timeout: 15_000 });
-    return true;
-  } catch (e) {
-    console.error("[LMIS] Login failed:", e);
-    return false;
+      // Wait for navigation to confirm login success
+      await page.waitForURL(/dashboard|home|index/, { timeout: 15_000 });
+      return true;
+    } catch (e) {
+      console.warn(`[LMIS] Login attempt ${attempt} failed:`, e);
+      if (attempt === maxRetries) {
+        console.error("[LMIS] Max login retries reached.");
+        return false;
+      }
+      // Wait before retrying
+      await new Promise(resolve => setTimeout(resolve, 2000 * attempt));
+    }
   }
+  return false;
 }
 
 async function submitCandidateToLmis(page: Page, payload: LmisJobPayload, baseUrl: string): Promise<string> {

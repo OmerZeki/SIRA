@@ -74,109 +74,129 @@ async function updateJobStatus(jobId: string, status: AutomationStatus, result?:
 }
 
 async function loginToMusaned(page: Page, credentials: { username: string; password: string }): Promise<boolean> {
-  try {
-    await page.goto(`${MUSANED_URL}/login`, { waitUntil: "domcontentloaded", timeout: 30_000 });
+  const maxRetries = 3;
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      await page.goto(`${MUSANED_URL}/login`, { waitUntil: "domcontentloaded", timeout: 30_000 });
 
-    // Handle potential cookie consent dialogs
-    const cookieBtn = page.locator('button:has-text("Accept"), .accept-cookies').first();
-    if (await cookieBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await cookieBtn.click();
+      // Handle potential cookie consent dialogs
+      const cookieBtn = page.locator('button:has-text("Accept"), .accept-cookies').first();
+      if (await cookieBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+        await cookieBtn.click();
+      }
+
+      await page.fill('input[name="username"], input[type="text"]:visible', credentials.username);
+      await page.fill('input[name="password"], input[type="password"]:visible', credentials.password);
+      await page.click('button[type="submit"]:visible');
+
+      await page.waitForURL(/dashboard|home/, { timeout: 20_000 });
+      return true;
+    } catch (e) {
+      console.warn(`[Musaned] Login attempt ${attempt} failed:`, e);
+      if (attempt === maxRetries) {
+        console.error("[Musaned] Max login retries reached.");
+        return false;
+      }
+      await new Promise(resolve => setTimeout(resolve, 2000 * attempt));
     }
-
-    await page.fill('input[name="username"], input[type="text"]:visible', credentials.username);
-    await page.fill('input[name="password"], input[type="password"]:visible', credentials.password);
-    await page.click('button[type="submit"]:visible');
-
-    await page.waitForURL(/dashboard|home/, { timeout: 20_000 });
-    return true;
-  } catch (e) {
-    console.error("[Musaned] Login failed:", e);
-    return false;
   }
+  return false;
 }
 
 async function submitToMusaned(page: Page, payload: MusanedPayload): Promise<string> {
-  // Navigate to new worker registration
-  await page.goto(`${MUSANED_URL}/domestic-worker/new`, { waitUntil: "domcontentloaded", timeout: 30_000 });
+  const maxRetries = 3;
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      // Navigate to new worker registration
+      await page.goto(`${MUSANED_URL}/domestic-worker/new`, { waitUntil: "domcontentloaded", timeout: 30_000 });
 
-  await page.waitForSelector('form, .registration-form', { timeout: 15_000 });
+      await page.waitForSelector('form, .registration-form', { timeout: 15_000 });
 
-  const fillIfExists = async (selectors: string[], value: string) => {
-    for (const sel of selectors) {
-      try {
-        const el = page.locator(sel).first();
-        if (await el.isVisible({ timeout: 2000 })) {
-          await el.fill(value);
-          return;
+      const fillIfExists = async (selectors: string[], value: string) => {
+        for (const sel of selectors) {
+          try {
+            const el = page.locator(sel).first();
+            if (await el.isVisible({ timeout: 2000 })) {
+              await el.fill(value);
+              return;
+            }
+          } catch {}
         }
-      } catch {}
-    }
-    console.warn(`[Musaned] Could not fill selector for value: ${value.substring(0, 30)}`);
-  };
+        console.warn(`[Musaned] Could not fill selector for value: ${value.substring(0, 30)}`);
+      };
 
-  const selectIfExists = async (selectors: string[], value: string) => {
-    for (const sel of selectors) {
-      try {
-        const el = page.locator(sel).first();
-        if (await el.isVisible({ timeout: 2000 })) {
-          await el.selectOption(value);
-          return;
+      const selectIfExists = async (selectors: string[], value: string) => {
+        for (const sel of selectors) {
+          try {
+            const el = page.locator(sel).first();
+            if (await el.isVisible({ timeout: 2000 })) {
+              await el.selectOption(value);
+              return;
+            }
+          } catch {}
         }
-      } catch {}
+      };
+
+      // Step 1: Worker Details
+      await fillIfExists(['#workerFirstName', 'input[name="firstName"]'], payload.firstName);
+      await fillIfExists(['#workerFatherName', 'input[name="fatherName"]'], payload.fatherName || "");
+      await fillIfExists(['#workerGrandfatherName', 'input[name="grandfatherName"]'], payload.grandfatherName || "");
+      await fillIfExists(['#workerLastName', 'input[name="lastName"]'], payload.lastName);
+
+      if (payload.dateOfBirth) {
+        const dob = new Date(payload.dateOfBirth).toISOString().split("T")[0];
+        await fillIfExists(['input[name="dateOfBirth"]', '#workerDOB', '#dateOfBirth'], dob);
+      }
+
+      // Passport fields
+      await fillIfExists(['#passportNumber', 'input[name="passportNo"]'], payload.passportNumber);
+
+      if (payload.dateOfExpiry) {
+        const doe = new Date(payload.dateOfExpiry).toISOString().split("T")[0];
+        await fillIfExists(['input[name="passportExpiry"]', '#passportExpiry'], doe);
+      }
+
+      // Select nationality
+      if (payload.nationality) {
+        await selectIfExists(['select[name="nationality"]', '#nationality'], payload.nationality);
+      }
+
+      // Religion
+      if (payload.religion) {
+        await selectIfExists(['select[name="religion"]', '#religion'], payload.religion);
+      }
+
+      // Work position / occupation
+      if (payload.workPosition) {
+        await selectIfExists(
+          ['select[name="occupation"]', '#occupation', 'select[name="workPosition"]'],
+          payload.workPosition
+        );
+      }
+
+      // Screenshot before submit
+      await page.screenshot({ path: `/tmp/musaned_${payload.jobId}_filled.png` }).catch(() => {});
+
+      // Next / Submit
+      const nextBtn = page.locator('button:has-text("Next"), button[type="submit"], .btn-next').first();
+      await nextBtn.click();
+
+      // Wait for confirmation
+      await page.waitForSelector('.confirmation, .success-message, #contractNumber', { timeout: 20_000 });
+
+      const contractEl = page.locator('.contract-number, #contractNumber, .reference-id').first();
+      const contractNumber = await contractEl.textContent().catch(() => `MSN_${Date.now()}`);
+
+      return contractNumber?.trim() || `MSN_${Date.now()}`;
+    } catch (e) {
+      console.warn(`[Musaned] Submit attempt ${attempt} failed:`, e);
+      if (attempt === maxRetries) {
+        throw new Error(`Failed to submit to Musaned after ${maxRetries} attempts.`);
+      }
+      await new Promise(resolve => setTimeout(resolve, 3000 * attempt));
     }
-  };
-
-  // Step 1: Worker Details
-  await fillIfExists(['#workerFirstName', 'input[name="firstName"]'], payload.firstName);
-  await fillIfExists(['#workerFatherName', 'input[name="fatherName"]'], payload.fatherName || "");
-  await fillIfExists(['#workerGrandfatherName', 'input[name="grandfatherName"]'], payload.grandfatherName || "");
-  await fillIfExists(['#workerLastName', 'input[name="lastName"]'], payload.lastName);
-
-  if (payload.dateOfBirth) {
-    const dob = new Date(payload.dateOfBirth).toISOString().split("T")[0];
-    await fillIfExists(['input[name="dateOfBirth"]', '#workerDOB', '#dateOfBirth'], dob);
   }
-
-  // Passport fields
-  await fillIfExists(['#passportNumber', 'input[name="passportNo"]'], payload.passportNumber);
-
-  if (payload.dateOfExpiry) {
-    const doe = new Date(payload.dateOfExpiry).toISOString().split("T")[0];
-    await fillIfExists(['input[name="passportExpiry"]', '#passportExpiry'], doe);
-  }
-
-  // Select nationality
-  if (payload.nationality) {
-    await selectIfExists(['select[name="nationality"]', '#nationality'], payload.nationality);
-  }
-
-  // Religion
-  if (payload.religion) {
-    await selectIfExists(['select[name="religion"]', '#religion'], payload.religion);
-  }
-
-  // Work position / occupation
-  if (payload.workPosition) {
-    await selectIfExists(
-      ['select[name="occupation"]', '#occupation', 'select[name="workPosition"]'],
-      payload.workPosition
-    );
-  }
-
-  // Screenshot before submit
-  await page.screenshot({ path: `/tmp/musaned_${payload.jobId}_filled.png` });
-
-  // Next / Submit
-  const nextBtn = page.locator('button:has-text("Next"), button[type="submit"], .btn-next').first();
-  await nextBtn.click();
-
-  // Wait for confirmation
-  await page.waitForSelector('.confirmation, .success-message, #contractNumber', { timeout: 20_000 });
-
-  const contractEl = page.locator('.contract-number, #contractNumber, .reference-id').first();
-  const contractNumber = await contractEl.textContent().catch(() => `MSN_${Date.now()}`);
-
-  return contractNumber?.trim() || `MSN_${Date.now()}`;
+  throw new Error("Failed to submit to Musaned.");
 }
 
 export async function runMusanedWorker(payload: MusanedPayload): Promise<void> {
