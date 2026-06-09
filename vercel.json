@@ -1,9 +1,10 @@
 {
   "buildCommand": "npm run build",
   "devCommand": "next dev",
-  "installCommand": "npm ci",
+  "installCommand": "npm install",
   "env": {
-    "NODE_ENV": "production"
+    "NODE_ENV": "production",
+    "PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD": "1"
   },
   "nodeVersion": "20.x",
   "regions": ["iad1"]
