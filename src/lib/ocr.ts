@@ -471,9 +471,11 @@ function parseMrz(line1: string, line2: string, rawText: string): ParsedPassport
   const surname = nameParts[0] || "";
   const givenNames = (nameParts[1] || "").split(" ").filter((part) => part.length > 0);
   const gender = line2.substring(20, 21);
+  const dateOfBirth = formatMrzDate(line2.substring(13, 19));
+  const dateOfExpiry = formatMrzDate(line2.substring(21, 27));
 
   // Extract additional fields not in MRZ
-  const additional = extractAdditionalFields(rawText);
+  const additional = extractAdditionalFields(rawText, dateOfBirth, dateOfExpiry);
 
   return {
     mrzLine1: line1,
@@ -485,9 +487,9 @@ function parseMrz(line1: string, line2: string, rawText: string): ParsedPassport
     lastNameAmh: "",
     passportNumber: line2.substring(0, 9).replace(/</g, "").trim(),
     nationality: nationalityCode === "ETH" ? "Ethiopian" : nationalityCode,
-    dateOfBirth: formatMrzDate(line2.substring(13, 19)),
+    dateOfBirth,
     dateOfIssue: additional.dateOfIssue,
-    dateOfExpiry: formatMrzDate(line2.substring(21, 27)),
+    dateOfExpiry,
     gender: gender === "M" ? "M" : "F",
     placeOfBirth: additional.placeOfBirth,
     placeOfIssue: additional.placeOfIssue,
