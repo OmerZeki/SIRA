@@ -68,11 +68,16 @@ const AMHARIC_LABEL_WORDS = new Set<string>([
   "የፓስፖርት", "ፓስፖርት", // passport
   "ወር", "ዓመት", // month, year
   "የምስል", "ምስል", // photo/picture
-  "የባለቤት", "ባለቤት", // spouse
+  "የባለቤት", "ባለቤት", "የባለቤቱ", // spouse / bearer
   "የተፈረመ", "ፊርማ", // signature
   "ሙያ", "ሥራ", // occupation
   "ቁጥር", // number
-  "ሀገር", "አገር", // country
+  "ሀገር", "አገር", "የአገር", // country
+  "የሚያበቃበት", "የሚያበቃ", // expiry
+  "የተሰጠበት", "የተሰጠ", "የሰጠው", // issue / issued
+  "ባለስልጣን", "ኢሚግሬሽን", "ዋና", "መምሪያ", // authority / immigration / main / department
+  "ዓይነት", "ኮድ", "የግል", // type / code / personal
+  "ቦታ", // place
 ]);
 
 // Ethiopic genitive prefix "የ" marks possessive label words (የስም, የአባት, የጉዞ ...).
@@ -166,12 +171,12 @@ function extractAmharicNameFields(rawText: string) {
       upper.includes("LAST NAME") ||
       (hasAmharic && (line.includes("አያት") || line.includes("የአያት")));
 
-    if (isSurnameLine) {
+    if (isSurnameLine && !surnameAmh) {
       const words = extractAmharicWords(line);
       if (words.length > 0) {
         surnameAmh = words.join(" ");
       } else {
-        const next = findAmharicValueOnLineOrNear(lines, i, 3);
+        const next = findAmharicValueOnLineOrNear(lines, i + 1, 3);
         if (next) surnameAmh = next;
       }
       continue;
@@ -184,9 +189,9 @@ function extractAmharicNameFields(rawText: string) {
       (upper.includes("NAME") &&
         !upper.includes("SURNAME") &&
         !/\bFAMILY\s+NAME|\bLAST\s+NAME/.test(upper)) ||
-      (hasAmharic && /[ሀ-፿]/.test(line) && !line.includes("አያት"));
+      (hasAmharic && (line.includes("ስም") || line.includes("የስም")) && !line.includes("አያት"));
 
-    if (isGivenLine) {
+    if (isGivenLine && !firstNameAmh) {
       const words = extractAmharicWords(line);
       if (words.length >= 2) {
         firstNameAmh = words[0];
@@ -194,11 +199,11 @@ function extractAmharicNameFields(rawText: string) {
       } else if (words.length === 1) {
         // Only one word on this line – might be first name; father's name may be below
         firstNameAmh = words[0];
-        const next = findAmharicValueOnLineOrNear(lines, i, 3);
+        const next = findAmharicValueOnLineOrNear(lines, i + 1, 3);
         if (next && !fatherNameAmh) fatherNameAmh = next;
       } else {
         // No words on label line, try next lines
-        const next = findAmharicValueOnLineOrNear(lines, i, 3);
+        const next = findAmharicValueOnLineOrNear(lines, i + 1, 3);
         if (next) {
           const parts = next.split(/\s+/).filter(Boolean);
           if (parts.length >= 1) firstNameAmh = parts[0];
