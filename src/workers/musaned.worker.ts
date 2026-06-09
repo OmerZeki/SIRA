@@ -10,7 +10,8 @@
  *   DATABASE_URL, MUSANED_USERNAME, MUSANED_PASSWORD
  */
 
-import { chromium, type Browser, type Page } from "playwright";
+import { chromium as playwright, type Browser, type Page } from "playwright-core";
+import chromium from "@sparticuz/chromium";
 import { PrismaClient, type AutomationStatus } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
@@ -217,9 +218,11 @@ export async function runMusanedWorker(payload: MusanedPayload): Promise<void> {
       religion: applicant.religion || undefined,
     };
 
-    browser = await chromium.launch({
-      headless: true,
-      args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
+    browser = await playwright.launch({
+      args: chromium.args,
+      executablePath: await chromium.executablePath(),
+      // @ts-ignore
+      headless: chromium.headless,
     });
 
     const context = await browser.newContext({

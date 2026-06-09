@@ -262,15 +262,15 @@ function extractAmharicNameFields(rawText: string) {
  * DATE_DMY  →  DD / MM / YYYY (or . - space separators)
  * DATE_YMD  →  YYYY / MM / DD
  */
-const DATE_DMY = /\b(\d{2})[\/\.\-\s](\d{2})[\/\.\-\s](\d{4})\b/;
+const DATE_DMY = /\b(\d{2})[\/\.\-\s](\d{2})[\/\.\-\s](\d{2,4})\b/;
 const DATE_YMD = /\b(\d{4})[\/\.\-\s](\d{2})[\/\.\-\s](\d{2})\b/;
 
 /**
  * Textual date matcher for passports that print month names.
- * Supports  "12 AUG 2012", "12-Aug-2012", "12 Aug 2012", etc.
+ * Supports  "12 AUG 2012", "12-Aug-2012", "12 Aug 2012", "27 FEB 26", etc.
  */
 const MONTH_NAMES = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
-const DATE_TEXTUAL = /\b(\d{1,2})[\s\/\-\.]([A-Z]{3,9})[\s\/\-\.](\d{4})\b/;
+const DATE_TEXTUAL = /\b(\d{1,2})[\s\/\-\.]([A-Z]{3,9})[\s\/\-\.](\d{2,4})\b/;
 
 function monthNameToNumber(monthStr: string): string | null {
   const idx = MONTH_NAMES.indexOf(monthStr.toUpperCase().slice(0, 3));
@@ -278,7 +278,7 @@ function monthNameToNumber(monthStr: string): string | null {
 }
 
 function isValidYear(yearStr: string): boolean {
-  const y = parseInt(yearStr, 10);
+  const y = yearStr.length === 2 ? parseYY(yearStr) : parseInt(yearStr, 10);
   return y >= 1900 && y <= 2099;
 }
 
@@ -287,7 +287,9 @@ function parseDateFromMatch(m: RegExpMatchArray): string | null {
   const numeric = m[0].match(DATE_DMY);
   if (numeric) {
     // DD/MM/YYYY → YYYY-MM-DD
-    return `${numeric[3]}-${numeric[2]}-${numeric[1]}`;
+    let year = numeric[3];
+    if (year.length === 2) year = parseYY(year).toString();
+    return `${year}-${numeric[2]}-${numeric[1]}`;
   }
   const ymd = m[0].match(DATE_YMD);
   if (ymd) {
@@ -298,7 +300,9 @@ function parseDateFromMatch(m: RegExpMatchArray): string | null {
   const textual = m[0].match(DATE_TEXTUAL);
   if (textual) {
     const month = monthNameToNumber(textual[2]);
-    if (month) return `${textual[3]}-${month}-${textual[1].padStart(2, "0")}`;
+    let year = textual[3];
+    if (year.length === 2) year = parseYY(year).toString();
+    if (month) return `${year}-${month}-${textual[1].padStart(2, "0")}`;
   }
   return null;
 }
