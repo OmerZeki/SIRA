@@ -44,12 +44,13 @@ export const viewport: Viewport = {
   themeColor: "#5e6ad2",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const cookieLocale = cookies().get("NEXT_LOCALE")?.value;
+  const cookieStore = await cookies();
+  const cookieLocale = cookieStore.get("NEXT_LOCALE")?.value;
   const locale = isLocale(cookieLocale) ? cookieLocale : DEFAULT_LOCALE;
 
   return (

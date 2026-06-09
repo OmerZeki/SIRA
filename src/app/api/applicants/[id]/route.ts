@@ -12,15 +12,16 @@ function cleanEnumFields(data: any) {
 }
 
 // GET /api/applicants/[id]
-export async function GET(req: Request, { params }: { params: { id: string } }) {
+export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await params;
     const session = await auth();
     if (!session?.user?.agencyId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const applicant = await prisma.applicant.findFirst({
-      where: { id: params.id, agencyId: session.user.agencyId },
+      where: { id, agencyId: session.user.agencyId },
       include: {
         statusHistory: { orderBy: { timestamp: "desc" }, take: 20 },
         automationJobs: { orderBy: { enqueuedAt: "desc" }, take: 10 },
@@ -38,8 +39,9 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
 }
 
 // PATCH /api/applicants/[id]
-export async function PATCH(req: Request, { params }: { params: { id: string } }) {
+export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await params;
     const session = await auth();
     if (!session?.user?.agencyId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -55,7 +57,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
     // Fetch current applicant to check ownership + get old status
     const existing = await prisma.applicant.findFirst({
-      where: { id: params.id, agencyId: session.user.agencyId },
+      where: { id, agencyId: session.user.agencyId },
     });
 
     if (!existing) {
@@ -69,7 +71,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     };
 
     const updated = await prisma.applicant.update({
-      where: { id: params.id },
+      where: { id },
       data: {
         ...updateData,
         // Create status history entry if status changed
@@ -94,22 +96,23 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 }
 
 // DELETE /api/applicants/[id]
-export async function DELETE(req: Request, { params }: { params: { id: string } }) {
+export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await params;
     const session = await auth();
     if (!session?.user?.agencyId || !["OWNER", "MANAGER"].includes(session.user.role)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const existing = await prisma.applicant.findFirst({
-      where: { id: params.id, agencyId: session.user.agencyId },
+      where: { id, agencyId: session.user.agencyId },
     });
 
     if (!existing) {
       return NextResponse.json({ error: "Candidate not found" }, { status: 404 });
     }
 
-    await prisma.applicant.delete({ where: { id: params.id } });
+    await prisma.applicant.delete({ where: { id } });
     return NextResponse.json({ success: true });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });

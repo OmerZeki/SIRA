@@ -14,7 +14,7 @@ export default async function DashboardPage() {
   const agencyId = session?.user?.agencyId;
 
   // Resolve locale
-  const cookieStore = cookies();
+  const cookieStore = await cookies();
   const cookieLocale = cookieStore.get("NEXT_LOCALE")?.value;
   const locale = isLocale(cookieLocale) ? cookieLocale : DEFAULT_LOCALE;
   const t = getDictionary(locale);

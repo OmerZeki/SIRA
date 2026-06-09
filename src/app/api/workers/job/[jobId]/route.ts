@@ -10,13 +10,14 @@ import { buildWorkerJobPayload } from "@/lib/worker-job";
  * and machine-friendly field values. Authenticated with the static worker
  * secret header (`x-sira-worker-secret`).
  */
-export async function GET(_req: Request, { params }: { params: { jobId: string } }) {
+export async function GET(_req: Request, { params }: { params: Promise<{ jobId: string }> }) {
   try {
+    const { jobId } = await params;
     if (!verifyWorkerSecret(_req)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const payload = await buildWorkerJobPayload(params.jobId);
+    const payload = await buildWorkerJobPayload(jobId);
     if (!payload) {
       return NextResponse.json({ error: "Job not found" }, { status: 404 });
     }

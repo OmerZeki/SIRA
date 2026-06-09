@@ -13,9 +13,10 @@ function isAuthorized(secret: string | null) {
 
 export async function POST(
   req: Request,
-  { params }: { params: { worker: string } }
+  { params }: { params: Promise<{ worker: string }> }
 ) {
   try {
+    const { worker } = await params;
     if (!isAuthorized(req.headers.get("x-sira-worker-secret"))) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -37,13 +38,13 @@ export async function POST(
       return NextResponse.json({ error: "Automation job not found." }, { status: 404 });
     }
 
-    if (params.worker === "ethiopian_lmis" && platform === "ethiopian_lmis") {
+    if (worker === "ethiopian_lmis" && platform === "ethiopian_lmis") {
       await runLmisWorker({ jobId, applicantId } as any);
       return NextResponse.json({ success: true });
     }
 
     if (
-      (params.worker === "guided-session" || params.worker === "tawtheeq_musaned") &&
+      (worker === "guided-session" || worker === "tawtheeq_musaned") &&
       platform === "tawtheeq_musaned"
     ) {
       await runMusanedWorker({ jobId, applicantId } as any);
