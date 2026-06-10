@@ -6,6 +6,5 @@
     "NODE_ENV": "production",
     "PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD": "1"
   },
-  "nodeVersion": "20.x",
   "regions": ["iad1"]
 }
