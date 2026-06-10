@@ -105,6 +105,8 @@ function isAmharicLabelWord(word: string): boolean {
   if (AMHARIC_LABEL_WORDS.has(word)) return true;
   // Short tokens starting with the genitive prefix are almost always labels.
   if (word.startsWith(AMHARIC_GENITIVE_PREFIX) && word.length <= 6) return true;
+  // Words ending with "በት" (bet) are usually labels for date/place (e.g. የተወለደበት, የተሰጠበት, የሚያበቃበት)
+  if (word.endsWith("በት")) return true;
   // A long label may be concatenated with surrounding text by OCR.
   for (const label of AMHARIC_LABEL_WORDS) {
     if (label.length >= 4 && word.includes(label)) return true;
@@ -122,23 +124,6 @@ function extractAmharicWords(line: string): string[] {
   return words.filter((w) => w.length > 1 && !isAmharicLabelWord(w));
 }
 
-function findAmharicValueOnLineOrNear(lines: string[], startIdx: number, skipLines: number = 3): string {
-  // Look through the next few lines for Amharic name words.
-  // We NO LONGER require pure-Amharic lines — on Ethiopian passports
-  // the Amharic name often lives on the *same* line as the English label.
-  for (let i = startIdx; i < Math.min(startIdx + 1 + skipLines, lines.length); i++) {
-    const line = lines[i];
-    const hasAmharic = /[\u1200-\u137F]/.test(line);
-    if (!hasAmharic) continue;
-
-    const filtered = extractAmharicWords(line);
-    if (filtered.length > 0) {
-      return filtered.join(" ");
-    }
-  }
-  return "";
-}
-
 function extractAmharicNameFields(rawText: string) {
   const lines = rawText
     .split(/\r?\n/)
@@ -148,6 +133,24 @@ function extractAmharicNameFields(rawText: string) {
   let surnameAmh = "";
   let fatherNameAmh = "";
   let firstNameAmh = "";
+
+  const usedLines = new Set<number>();
+
+  const findAmharicValueOnLineOrNear = (startIdx: number, skipLines: number = 3): string => {
+    for (let i = startIdx; i < Math.min(startIdx + 1 + skipLines, lines.length); i++) {
+      if (usedLines.has(i)) continue;
+      const line = lines[i];
+      const hasAmharic = /[\u1200-\u137F]/.test(line);
+      if (!hasAmharic) continue;
+
+      const filtered = extractAmharicWords(line);
+      if (filtered.length > 0) {
+        usedLines.add(i);
+        return filtered.join(" ");
+      }
+    }
+    return "";
+  };
 
   // -----------------------------------------------------------------
   // Label-guided extraction: look at each line, identify whether it is
@@ -175,8 +178,9 @@ function extractAmharicNameFields(rawText: string) {
       const words = extractAmharicWords(line);
       if (words.length > 0) {
         surnameAmh = words.join(" ");
+        usedLines.add(i);
       } else {
-        const next = findAmharicValueOnLineOrNear(lines, i + 1, 3);
+        const next = findAmharicValueOnLineOrNear(i + 1, 3);
         if (next) surnameAmh = next;
       }
       continue;
@@ -196,14 +200,16 @@ function extractAmharicNameFields(rawText: string) {
       if (words.length >= 2) {
         firstNameAmh = words[0];
         fatherNameAmh = words.slice(1).join(" ");
+        usedLines.add(i);
       } else if (words.length === 1) {
         // Only one word on this line – might be first name; father's name may be below
         firstNameAmh = words[0];
-        const next = findAmharicValueOnLineOrNear(lines, i + 1, 3);
+        usedLines.add(i);
+        const next = findAmharicValueOnLineOrNear(i + 1, 3);
         if (next && !fatherNameAmh) fatherNameAmh = next;
       } else {
         // No words on label line, try next lines
-        const next = findAmharicValueOnLineOrNear(lines, i + 1, 3);
+        const next = findAmharicValueOnLineOrNear(i + 1, 3);
         if (next) {
           const parts = next.split(/\s+/).filter(Boolean);
           if (parts.length >= 1) firstNameAmh = parts[0];
@@ -223,17 +229,14 @@ function extractAmharicNameFields(rawText: string) {
   // -----------------------------------------------------------------
   if (!firstNameAmh || !surnameAmh) {
     const allWords: string[] = [];
-    for (const line of lines) {
-      const words = extractAmharicWords(line);
+    for (let i = 0; i < lines.length; i++) {
+      if (usedLines.has(i)) continue;
+      const words = extractAmharicWords(lines[i]);
       for (const w of words) {
         if (!allWords.includes(w)) allWords.push(w);
       }
     }
     if (allWords.length >= 3) {
-      // Typical Ethiopian passport order appears as:
-      // SURNAME line first (grandfather), then GIVEN NAMES (first + father)
-      // But the fallback order below reads the text top-to-bottom.
-      // If the text is mixed, safest is: first=first, middle=second, last=last
       if (!firstNameAmh) firstNameAmh = allWords[0];
       if (!fatherNameAmh && allWords.length >= 2) fatherNameAmh = allWords.slice(1, -1).join(" ") || allWords[1];
       if (!surnameAmh) surnameAmh = allWords[allWords.length - 1];
@@ -317,9 +320,12 @@ function parseDateFromMatch(m: RegExpMatchArray): string | null {
  * - dateOfIssue (often labeled as "Date of Issue" or "Issuance Date")
  * - placeOfBirth (often labeled as "Place of Birth" or "Place of Origin")
  */
-function extractAdditionalFields(rawText: string) {
+function extractAdditionalFields(rawText: string, excludeDate1?: string, excludeDate2?: string) {
   const upper = rawText.toUpperCase();
   let dateOfIssue = "";
+
+  // Helper to check if a parsed date should be ignored
+  const isExcluded = (d: string) => d === excludeDate1 || d === excludeDate2;
 
   // --- Strategy 1: English and Amharic label + date on same line ---
   // Ethiopian passports may have the issue-date label in Amharic:
@@ -340,17 +346,17 @@ function extractAdditionalFields(rawText: string) {
     const dmy = windowText.match(DATE_DMY);
     if (dmy && isValidYear(dmy[3])) {
       const parsed = parseDateFromMatch(dmy);
-      if (parsed) { dateOfIssue = parsed; break; }
+      if (parsed && !isExcluded(parsed)) { dateOfIssue = parsed; break; }
     }
     const ymd = windowText.match(DATE_YMD);
     if (ymd && isValidYear(ymd[1])) {
       const parsed = parseDateFromMatch(ymd);
-      if (parsed) { dateOfIssue = parsed; break; }
+      if (parsed && !isExcluded(parsed)) { dateOfIssue = parsed; break; }
     }
     const txt = windowText.match(DATE_TEXTUAL);
     if (txt) {
       const parsed = parseDateFromMatch(txt);
-      if (parsed) { dateOfIssue = parsed; break; }
+      if (parsed && !isExcluded(parsed)) { dateOfIssue = parsed; break; }
     }
   }
 
@@ -363,11 +369,11 @@ function extractAdditionalFields(rawText: string) {
         for (let j = i; j < Math.min(i + 6, rawLines.length); j++) {
           const checkLine = rawLines[j].toUpperCase();
           let d = checkLine.match(DATE_DMY);
-          if (d && isValidYear(d[3])) { const p = parseDateFromMatch(d); if (p) { dateOfIssue = p; break; } }
+          if (d && isValidYear(d[3])) { const p = parseDateFromMatch(d); if (p && !isExcluded(p)) { dateOfIssue = p; break; } }
           d = checkLine.match(DATE_YMD);
-          if (d && isValidYear(d[1])) { const p = parseDateFromMatch(d); if (p) { dateOfIssue = p; break; } }
+          if (d && isValidYear(d[1])) { const p = parseDateFromMatch(d); if (p && !isExcluded(p)) { dateOfIssue = p; break; } }
           d = checkLine.match(DATE_TEXTUAL);
-          if (d) { const p = parseDateFromMatch(d); if (p) { dateOfIssue = p; break; } }
+          if (d) { const p = parseDateFromMatch(d); if (p && !isExcluded(p)) { dateOfIssue = p; break; } }
         }
         if (dateOfIssue) break;
       }
@@ -379,11 +385,24 @@ function extractAdditionalFields(rawText: string) {
     const allDates = [...upper.matchAll(new RegExp(DATE_DMY.source, "g"))];
     for (const d of allDates) {
       const parsed = parseDateFromMatch(d);
-      if (!parsed) continue;
+      if (!parsed || isExcluded(parsed)) continue;
       const before = upper.slice(Math.max(0, (d.index || 0) - 80), (d.index || 0));
       if (/ISSUE|ISSUANCE|ISSUED|PASSPORT|DOCUMENT/.test(before)) {
         dateOfIssue = parsed;
         break;
+      }
+    }
+    
+    if (!dateOfIssue) {
+      const allTextualDates = [...upper.matchAll(new RegExp(DATE_TEXTUAL.source, "g"))];
+      for (const d of allTextualDates) {
+        const parsed = parseDateFromMatch(d);
+        if (!parsed || isExcluded(parsed)) continue;
+        const before = upper.slice(Math.max(0, (d.index || 0) - 80), (d.index || 0));
+        if (/ISSUE|ISSUANCE|ISSUED|PASSPORT|DOCUMENT/.test(before)) {
+          dateOfIssue = parsed;
+          break;
+        }
       }
     }
   }
