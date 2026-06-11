@@ -124,7 +124,11 @@ function extractAmharicWords(line: string): string[] {
   return words.filter((w) => w.length > 1 && !isAmharicLabelWord(w));
 }
 
-function extractAmharicNameFields(rawText: string) {
+function extractAmharicNameFields(
+  rawText: string,
+  englishSurname?: string,
+  englishGivenNames?: string[]
+) {
   const lines = rawText
     .split(/\r?\n/)
     .map((line) => line.trim())
@@ -136,7 +140,7 @@ function extractAmharicNameFields(rawText: string) {
 
   const usedLines = new Set<number>();
 
-  const findAmharicValueOnLineOrNear = (startIdx: number, skipLines: number = 3): string => {
+  const findAmharicValueOnLineOrNear = (startIdx: number, skipLines: number = 10): string => {
     for (let i = startIdx; i < Math.min(startIdx + 1 + skipLines, lines.length); i++) {
       if (usedLines.has(i)) continue;
       const line = lines[i];
@@ -153,92 +157,177 @@ function extractAmharicNameFields(rawText: string) {
   };
 
   // -----------------------------------------------------------------
-  // Label-guided extraction: look at each line, identify whether it is
-  // a SURNAME or a GIVEN-NAME field, and pull the Amharic tokens from
-  // exactly that line (or the next pure-Amharic line if the value dropped
-  // to the next line).
-  //
-  // Ethiopian passport layout:
-  //   SURNAME / LAST NAME  → grandfather's name (lastNameAmh)
-  //   GIVEN NAMES / NAME   → first name + father's name
+  // PRIMARY: English-anchored extraction.
+  // Use the known English names from the MRZ to find each name's
+  // position in the raw text, then look for Amharic text nearby.
+  // This is robust even when the Amharic column is in a separate
+  // section of the OCR output.
   // -----------------------------------------------------------------
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    const upper = line.toUpperCase();
-    const hasAmharic = /[\u1200-\u137F]/.test(line);
-
-    // ---- SURNAME / LAST NAME / የአያት ስም ----
-    const isSurnameLine =
-      upper.includes("SURNAME") ||
-      upper.includes("FAMILY NAME") ||
-      upper.includes("LAST NAME") ||
-      (hasAmharic && (line.includes("አያት") || line.includes("የአያት")));
-
-    if (isSurnameLine && !surnameAmh) {
-      const words = extractAmharicWords(line);
+  if (englishSurname || (englishGivenNames && englishGivenNames.length > 0)) {
+    // Collect all Amharic words with their line positions
+    const amharicLines: { lineIndex: number; words: string[] }[] = [];
+    for (let i = 0; i < lines.length; i++) {
+      const words = extractAmharicWords(lines[i]);
       if (words.length > 0) {
-        surnameAmh = words.join(" ");
-        usedLines.add(i);
-      } else {
-        const next = findAmharicValueOnLineOrNear(i + 1, 3);
-        if (next) surnameAmh = next;
+        amharicLines.push({ lineIndex: i, words });
       }
-      continue;
     }
 
-    // ---- GIVEN NAMES / NAME / ስም ----
-    const isGivenLine =
-      upper.includes("GIVEN") ||
-      upper.includes("FIRST NAME") ||
-      (upper.includes("NAME") &&
-        !upper.includes("SURNAME") &&
-        !/\bFAMILY\s+NAME|\bLAST\s+NAME/.test(upper)) ||
-      (hasAmharic && (line.includes("ስም") || line.includes("የስም")) && !line.includes("አያት"));
-
-    if (isGivenLine && !firstNameAmh) {
-      const words = extractAmharicWords(line);
-      if (words.length >= 2) {
-        firstNameAmh = words[0];
-        fatherNameAmh = words.slice(1).join(" ");
-        usedLines.add(i);
-      } else if (words.length === 1) {
-        // Only one word on this line – might be first name; father's name may be below
-        firstNameAmh = words[0];
-        usedLines.add(i);
-        const next = findAmharicValueOnLineOrNear(i + 1, 3);
-        if (next && !fatherNameAmh) fatherNameAmh = next;
-      } else {
-        // No words on label line, try next lines
-        const next = findAmharicValueOnLineOrNear(i + 1, 3);
-        if (next) {
-          const parts = next.split(/\s+/).filter(Boolean);
-          if (parts.length >= 1) firstNameAmh = parts[0];
-          if (parts.length >= 2) fatherNameAmh = parts.slice(1).join(" ");
+    // Find Amharic words closest to a given English name in the raw text.
+    const findClosestAmharicToEnglish = (
+      englishName: string
+    ): { words: string[]; lineIndex: number } | null => {
+      if (!englishName) return null;
+      // Find the line index where this English name appears
+      let englishLineIdx = -1;
+      const upperName = englishName.toUpperCase();
+      for (let i = 0; i < lines.length; i++) {
+        const lineUpper = lines[i].toUpperCase();
+        if (lineUpper.includes(upperName)) {
+          englishLineIdx = i;
+          break;
         }
       }
-      // We do NOT `continue` here — some passports put both given names
-      // on the same physical line, and we want to avoid accidentally
-      // also matching a following surname line with a loose "NAME" check.
-      continue;
+      if (englishLineIdx === -1) return null;
+
+      // Find the closest unused Amharic line to this English line
+      let bestDist = Infinity;
+      let bestWords: string[] | null = null;
+      let bestIdx = -1;
+
+      for (const entry of amharicLines) {
+        if (usedLines.has(entry.lineIndex)) continue;
+
+        const dist = Math.abs(entry.lineIndex - englishLineIdx);
+        if (dist < bestDist) {
+          bestDist = dist;
+          bestWords = entry.words;
+          bestIdx = entry.lineIndex;
+        }
+      }
+
+      if (bestWords && bestIdx >= 0) {
+        return { words: bestWords, lineIndex: bestIdx };
+      }
+      return null;
+    };
+
+    // Ethiopian passport naming convention:
+    //   SURNAME / LAST NAME → grandfather's name → lastNameAmh
+    //   GIVEN NAMES → [first name, father's name] → firstNameAmh, middleNameAmh
+    if (englishSurname) {
+      const match = findClosestAmharicToEnglish(englishSurname);
+      if (match) {
+        surnameAmh = match.words.join(" ");
+        usedLines.add(match.lineIndex);
+      }
+    }
+
+    if (englishGivenNames && englishGivenNames.length > 0) {
+      // First given name → first name in Amharic (ONLY the first word)
+      const firstNameMatch = findClosestAmharicToEnglish(englishGivenNames[0]);
+      if (firstNameMatch) {
+        firstNameAmh = firstNameMatch.words[0];
+        usedLines.add(firstNameMatch.lineIndex);
+
+        if (englishGivenNames.length > 1) {
+          // Try to find a separate Amharic line for the remaining given names
+          const remainingNames = englishGivenNames.slice(1).join(" ");
+          const fatherNameMatch = findClosestAmharicToEnglish(remainingNames);
+
+          if (fatherNameMatch) {
+            // Found a separate Amharic line for the father's name
+            fatherNameAmh = fatherNameMatch.words.join(" ");
+            usedLines.add(fatherNameMatch.lineIndex);
+          } else if (firstNameMatch.words.length > 1) {
+            // Same line has both names — use remaining words as father's name
+            fatherNameAmh = firstNameMatch.words.slice(1).join(" ");
+          }
+        }
+      }
     }
   }
 
   // -----------------------------------------------------------------
-  // Fallback 1: If still missing names, scan ALL lines for any line
-  // with at least 3 clean Amharic words and assign by order.
+  // SECONDARY: Label-guided extraction — only for fields still missing.
+  // Ethiopian passport layout:
+  //   SURNAME / LAST NAME  → grandfather's name (lastNameAmh)
+  //   GIVEN NAMES / NAME   → first name + father's name
+  // -----------------------------------------------------------------
+  if (!firstNameAmh || !surnameAmh) {
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const upper = line.toUpperCase();
+      const hasAmharic = /[\u1200-\u137F]/.test(line);
+
+      // ---- SURNAME / LAST NAME / የአያት ስም ----
+      const isSurnameLine =
+        upper.includes("SURNAME") ||
+        upper.includes("FAMILY NAME") ||
+        upper.includes("LAST NAME") ||
+        (hasAmharic && (line.includes("አያት") || line.includes("የአያት")));
+
+      if (isSurnameLine && !surnameAmh) {
+        const words = extractAmharicWords(line);
+        if (words.length > 0) {
+          surnameAmh = words.join(" ");
+          usedLines.add(i);
+        } else {
+          const next = findAmharicValueOnLineOrNear(i + 1, 10);
+          if (next) surnameAmh = next;
+        }
+        continue;
+      }
+
+      // ---- GIVEN NAMES / NAME / ስም ----
+      const isGivenLine =
+        upper.includes("GIVEN") ||
+        upper.includes("FIRST NAME") ||
+        (upper.includes("NAME") &&
+          !upper.includes("SURNAME") &&
+          !/\bFAMILY\s+NAME|\bLAST\s+NAME/.test(upper)) ||
+        (hasAmharic && (line.includes("ስም") || line.includes("የስም")) && !line.includes("አያት"));
+
+      if (isGivenLine && !firstNameAmh) {
+        const words = extractAmharicWords(line);
+        if (words.length >= 2) {
+          firstNameAmh = words[0];
+          fatherNameAmh = words.slice(1).join(" ");
+          usedLines.add(i);
+        } else if (words.length === 1) {
+          firstNameAmh = words[0];
+          usedLines.add(i);
+          const next = findAmharicValueOnLineOrNear(i + 1, 10);
+          if (next && !fatherNameAmh) fatherNameAmh = next;
+        } else {
+          const next = findAmharicValueOnLineOrNear(i + 1, 10);
+          if (next) {
+            const parts = next.split(/\s+/).filter(Boolean);
+            if (parts.length >= 1) firstNameAmh = parts[0];
+            if (parts.length >= 2) fatherNameAmh = parts.slice(1).join(" ");
+          }
+        }
+        continue;
+      }
+    }
+  }
+
+  // -----------------------------------------------------------------
+  // TERTIARY FALLBACK: collect all remaining unused Amharic name words
+  // and assign them. Uses a simple left-to-right assignment without
+  // deduplication so the relative order of appearance is preserved.
   // -----------------------------------------------------------------
   if (!firstNameAmh || !surnameAmh) {
     const allWords: string[] = [];
     for (let i = 0; i < lines.length; i++) {
       if (usedLines.has(i)) continue;
       const words = extractAmharicWords(lines[i]);
-      for (const w of words) {
-        if (!allWords.includes(w)) allWords.push(w);
-      }
+      allWords.push(...words);
     }
+
     if (allWords.length >= 3) {
       if (!firstNameAmh) firstNameAmh = allWords[0];
-      if (!fatherNameAmh && allWords.length >= 2) fatherNameAmh = allWords.slice(1, -1).join(" ") || allWords[1];
+      if (!fatherNameAmh) fatherNameAmh = allWords.slice(1, -1).join(" ");
       if (!surnameAmh) surnameAmh = allWords[allWords.length - 1];
     } else if (allWords.length === 2) {
       if (!firstNameAmh) firstNameAmh = allWords[0];
@@ -249,7 +338,7 @@ function extractAmharicNameFields(rawText: string) {
   }
 
   // -----------------------------------------------------------------
-  // Fallback 2: If we have a surname but no first name (or vice versa),
+  // Cleanup: if we have a surname but no first name (or vice versa),
   // and they are the same string, clear the duplicate to avoid
   // presenting the same word twice.
   // -----------------------------------------------------------------
@@ -566,7 +655,7 @@ function normalizeResult(
 ): PassportOcrResult {
   const mrzValidated = Boolean(parsed.mrzLine1 && parsed.mrzLine2 && isMrzValidated(parsed.mrzLine1, parsed.mrzLine2));
   const confidenceScore = provider === "google" || mrzValidated ? 1 : Math.max(parsed.confidenceScore || 0, providerConfidence || 0);
-  const amharicNames = extractAmharicNameFields(rawText);
+  const amharicNames = extractAmharicNameFields(rawText, parsed.surname, parsed.givenNames);
   const warnings =
     confidenceScore < 0.7
       ? ["Low OCR confidence. Verify passport fields manually before saving."]
