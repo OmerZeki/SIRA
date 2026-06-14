@@ -105,35 +105,75 @@ app.get("/proxy", (req, res) => {
 
   const lib = target.protocol === "https:" ? https : http;
 
-  const proxyReq = lib.request(
-    {
-      hostname: target.hostname,
-      port: target.port || (target.protocol === "https:" ? 443 : 80),
-      path: target.pathname + target.search,
-      method: "GET",
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.9,am;q=0.8,ar;q=0.7",
-        "Accept-Encoding": "identity",
-      },
+  const requestOptions = {
+    hostname: target.hostname,
+    port: target.port || (target.protocol === "https:" ? 443 : 80),
+    path: target.pathname + target.search,
+    method: "GET",
+    headers: {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0 Safari/537.36",
+      "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      "Accept-Language": "en-US,en;q=0.9,am;q=0.8,ar;q=0.7",
+      "Accept-Encoding": "identity",
     },
-    (proxyRes) => {
-      // Forward status + filtered headers
-      const filteredHeaders = {};
-      for (const [k, v] of Object.entries(proxyRes.headers)) {
-        if (!STRIP_HEADERS.has(k.toLowerCase())) {
-          filteredHeaders[k] = v;
-        }
-      }
-      // Inject permissive frame headers
-      filteredHeaders["x-frame-options"] = "ALLOWALL";
-      filteredHeaders["access-control-allow-origin"] = "*";
+  };
 
-      res.writeHead(proxyRes.statusCode || 200, filteredHeaders);
-      pipeline(proxyRes, res, (err) => {
-        if (err) console.error("[proxy] pipeline error:", err.message);
-      });
+  if (target.protocol === "https:") {
+    requestOptions.rejectUnauthorized = false; // Bypass Jordan MOI eVisa SSL verification error
+  }
+
+  const proxyReq = lib.request(
+    requestOptions,
+    (proxyRes) => {
+      const contentType = proxyRes.headers["content-type"] || "";
+      const isHtml = contentType.toLowerCase().includes("text/html");
+
+      if (isHtml) {
+        let body = "";
+        proxyRes.on("data", (chunk) => {
+          body += chunk.toString("utf8");
+        });
+        proxyRes.on("end", () => {
+          const baseHref = target.origin + target.pathname;
+
+          let modifiedHtml = body;
+          const headTag = "<head>";
+          const headIndex = body.toLowerCase().indexOf(headTag);
+          
+          if (headIndex !== -1) {
+            const insertPos = headIndex + headTag.length;
+            modifiedHtml = body.slice(0, insertPos) + `\n<base href="${baseHref}">\n` + body.slice(insertPos);
+          } else {
+            modifiedHtml = `<base href="${baseHref}">\n` + body;
+          }
+
+          const filteredHeaders = {};
+          for (const [k, v] of Object.entries(proxyRes.headers)) {
+            if (!STRIP_HEADERS.has(k.toLowerCase()) && k.toLowerCase() !== "content-length") {
+              filteredHeaders[k] = v;
+            }
+          }
+          filteredHeaders["x-frame-options"] = "ALLOWALL";
+          filteredHeaders["access-control-allow-origin"] = "*";
+
+          res.writeHead(proxyRes.statusCode || 200, filteredHeaders);
+          res.end(modifiedHtml);
+        });
+      } else {
+        const filteredHeaders = {};
+        for (const [k, v] of Object.entries(proxyRes.headers)) {
+          if (!STRIP_HEADERS.has(k.toLowerCase())) {
+            filteredHeaders[k] = v;
+          }
+        }
+        filteredHeaders["x-frame-options"] = "ALLOWALL";
+        filteredHeaders["access-control-allow-origin"] = "*";
+
+        res.writeHead(proxyRes.statusCode || 200, filteredHeaders);
+        pipeline(proxyRes, res, (err) => {
+          if (err) console.error("[proxy] pipeline error:", err.message);
+        });
+      }
     }
   );
 

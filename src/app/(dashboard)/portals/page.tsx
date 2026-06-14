@@ -157,7 +157,7 @@ const PORTALS: Portal[] = [
     name: "Qatar Visa",
     nameAmh: "ቃጠር ቪዛ",
     nameAr: "تأشيرة قطر",
-    url: "https://www.moi.gov.qa/service/evisa",
+    url: "https://portal.moi.gov.qa/wps/portal/MOIInternet/services/inquiries/visainquiry",
     category: "gcc",
     automatable: false,
     proxiable: true,

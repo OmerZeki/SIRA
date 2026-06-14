@@ -30,7 +30,7 @@ services:
       - key: KUWAIT_MOI_URL
         value: https://evisa.moi.gov.kw/
       - key: QATAR_VISA_URL
-        value: https://www.moi.gov.qa/service/evisa
+        value: https://portal.moi.gov.qa/wps/portal/MOIInternet/services/inquiries/visainquiry
       - key: OMAN_VISA_URL
         value: https://evisa.rop.gov.om/
       - key: BAHRAIN_VISA_URL

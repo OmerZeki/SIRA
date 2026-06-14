@@ -152,7 +152,7 @@ const PORTALS = [
     name: "Qatar Visa",
     nameAmh: "ቃጠር ቪዛ",
     nameAr: "تأشيرة قطر",
-    url: process.env.QATAR_VISA_URL || "https://www.moi.gov.qa/service/evisa",
+    url: process.env.QATAR_VISA_URL || "https://portal.moi.gov.qa/wps/portal/MOIInternet/services/inquiries/visainquiry",
     category: "gcc",
     automatable: false,
     proxiable: true,
