@@ -4,7 +4,7 @@ services:
     env: node
     plan: free
     rootDir: sira-portals
-    buildCommand: npm install && npx playwright install chromium --with-deps
+    buildCommand: npm install && npx playwright install chromium
     startCommand: node server.js
     envVars:
       - key: PORTAL_API_SECRET
