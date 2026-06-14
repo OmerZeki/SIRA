@@ -1,0 +1,38 @@
+services:
+  - type: web
+    name: sira-portals
+    env: node
+    plan: free
+    buildCommand: npm install && npx playwright install chromium --with-deps
+    startCommand: node server.js
+    envVars:
+      - key: PORTAL_API_SECRET
+        generateValue: true
+      - key: SIRA_APP_ORIGIN
+        value: https://sira.qzz.io
+      - key: LMIS_BASE_URL
+        value: https://lmis.gov.et
+      - key: TAWTHEEQ_MUSANED_URL
+        value: https://tawtheeq.musaned.com.sa/
+      - key: MOFA_URL
+        value: https://visa.mofa.gov.sa/
+      - key: TASHEER_URL
+        value: https://vc.tasheer.com/home
+      - key: EASYENJAZ_URL
+        value: https://www.easyenjaz.net/
+      - key: WAFID_URL
+        value: https://wafid.com/en/medical-status-search/
+      - key: SAUDI_HRSD_URL
+        value: https://hrsd.gov.sa/
+      - key: UAE_ICP_URL
+        value: https://icp.gov.ae/en/
+      - key: KUWAIT_MOI_URL
+        value: https://evisa.moi.gov.kw/
+      - key: QATAR_VISA_URL
+        value: https://www.moi.gov.qa/service/evisa
+      - key: OMAN_VISA_URL
+        value: https://evisa.rop.gov.om/
+      - key: BAHRAIN_VISA_URL
+        value: https://www.evisa.gov.bh/
+      - key: JORDAN_MOI_URL
+        value: https://eservices.moi.gov.jo/

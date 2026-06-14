@@ -1,0 +1,21 @@
+{
+  "name": "sira-portals",
+  "version": "1.0.0",
+  "description": "SIRA Portal Service – reverse proxy + Playwright automation for government portals",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "install-browsers": "npx playwright install chromium"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "http-proxy-middleware": "^3.0.3",
+    "playwright": "^1.48.0"
+  }
+}

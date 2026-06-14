@@ -41,8 +41,16 @@ export default function AdminCodesPage() {
   const locale = useCurrentLocale();
   const t = getDictionary(locale);
 
+  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
+  const [adminUsername, setAdminUsername] = useState("");
+  const [adminPassword, setAdminPassword] = useState("");
+  const [usernameInput, setUsernameInput] = useState("");
+  const [passwordInput, setPasswordInput] = useState("");
+  const [authError, setAuthError] = useState("");
+  const [checkingAuth, setCheckingAuth] = useState(true);
+
   const [codes, setCodes] = useState<RegistrationCode[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [description, setDescription] = useState("");
   const [validityDays, setValidityDays] = useState(365);
@@ -51,23 +59,57 @@ export default function AdminCodesPage() {
   const [success, setSuccess] = useState("");
 
   useEffect(() => {
-    loadCodes();
+    const storedUser = sessionStorage.getItem("sira_admin_username");
+    const storedPass = sessionStorage.getItem("sira_admin_password");
+    if (storedUser && storedPass) {
+      setAdminUsername(storedUser);
+      setAdminPassword(storedPass);
+      setIsAdminAuthenticated(true);
+      loadCodes(storedUser, storedPass);
+    } else {
+      setCheckingAuth(false);
+    }
   }, []);
 
-  async function loadCodes() {
+  async function loadCodes(user = adminUsername, pass = adminPassword) {
+    setLoading(true);
+    setError("");
     try {
-      const res = await fetch("/api/admin/codes?includeExpired=true");
+      const res = await fetch("/api/admin/codes?includeExpired=true", {
+        headers: {
+          "x-admin-username": user,
+          "x-admin-password": pass,
+        }
+      });
       if (res.ok) {
         setCodes(await res.json());
-      } else if (res.status === 401 || res.status === 403) {
-        setError("You don't have permission to manage registration codes.");
+        setIsAdminAuthenticated(true);
+        sessionStorage.setItem("sira_admin_username", user);
+        sessionStorage.setItem("sira_admin_password", pass);
+        setAdminUsername(user);
+        setAdminPassword(pass);
+      } else if (res.status === 401) {
+        setIsAdminAuthenticated(false);
+        sessionStorage.removeItem("sira_admin_username");
+        sessionStorage.removeItem("sira_admin_password");
+        setAuthError("Invalid admin credentials.");
+      } else {
+        setError("An error occurred loading registration codes.");
       }
     } catch (e) {
       console.error(e);
+      setError("An error occurred loading registration codes.");
     } finally {
       setLoading(false);
+      setCheckingAuth(false);
     }
   }
+
+  const handleLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError("");
+    loadCodes(usernameInput, passwordInput);
+  };
 
   async function generateCode() {
     setGenerating(true);
@@ -77,11 +119,21 @@ export default function AdminCodesPage() {
     try {
       const res = await fetch("/api/admin/codes", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "x-admin-username": adminUsername,
+          "x-admin-password": adminPassword,
+        },
         body: JSON.stringify({ description, validityDays }),
       });
 
       if (!res.ok) {
+        if (res.status === 401) {
+          setIsAdminAuthenticated(false);
+          sessionStorage.removeItem("sira_admin_username");
+          sessionStorage.removeItem("sira_admin_password");
+          throw new Error("Session expired. Please log in again.");
+        }
         const err = await res.json();
         throw new Error(err.error || t.admin.generateFailed);
       }
@@ -113,6 +165,76 @@ export default function AdminCodesPage() {
 
   function formatDate(dateStr: string) {
     return new Date(dateStr).toLocaleDateString(locale === "en" ? "en-US" : locale === "ar" ? "ar-SA" : "am-ET");
+  }
+
+  if (checkingAuth) {
+    return (
+      <div className="flex items-center justify-center h-48">
+        <Loader2 className="w-8 h-8 text-primary animate-spin" />
+      </div>
+    );
+  }
+
+  if (!isAdminAuthenticated) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh] px-4">
+        <div className="w-full max-w-md bg-surface-1 border border-hairline rounded-xl p-8 shadow-2xl space-y-6">
+          <div className="text-center space-y-2">
+            <div className="w-12 h-12 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center mx-auto">
+              <Key className="w-6 h-6 text-primary animate-pulse" />
+            </div>
+            <h2 className="text-xl font-bold text-ink">SIRA Admin Portal</h2>
+            <p className="text-xs text-ink-subtle">
+              Enter admin credentials to manage registration codes.
+            </p>
+          </div>
+
+          <form onSubmit={handleLogin} className="space-y-4">
+            <div>
+              <label className="block text-xs font-semibold text-ink-tertiary mb-1">Username</label>
+              <input
+                type="text"
+                required
+                value={usernameInput}
+                onChange={(e) => setUsernameInput(e.target.value)}
+                placeholder="Admin username"
+                className="w-full input-text"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-ink-tertiary mb-1">Password</label>
+              <input
+                type="password"
+                required
+                value={passwordInput}
+                onChange={(e) => setPasswordInput(e.target.value)}
+                placeholder="••••••••••••"
+                className="w-full input-text"
+              />
+            </div>
+
+            {authError && (
+              <div className="p-3 bg-error/10 border border-error/30 rounded-lg flex items-center gap-2 text-xs text-error">
+                <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                <span>{authError}</span>
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full btn-primary py-2.5 font-semibold flex items-center justify-center gap-2 shadow-lg shadow-primary/20 transition-all duration-150"
+            >
+              {loading ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                "Authenticate"
+              )}
+            </button>
+          </form>
+        </div>
+      </div>
+    );
   }
 
   if (loading) {

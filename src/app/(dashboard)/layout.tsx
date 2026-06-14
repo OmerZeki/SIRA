@@ -19,6 +19,7 @@ import {
   Menu,
   X,
   Building2,
+  Globe,
 } from "lucide-react";
 import { LanguageSwitcher, useCurrentLocale } from "@/components/sira/LanguageSwitcher";
 import { ThemeToggle } from "@/components/sira/ThemeToggle";
@@ -37,6 +38,7 @@ const mainLinks: SidebarLink[] = [
   { href: "/import", labelKey: "import", icon: UploadCloud },
   { href: "/export", labelKey: "export", icon: Download },
   { href: "/automation", labelKey: "automation", icon: Cpu },
+  { href: "/portals", labelKey: "portals", icon: Globe },
 ];
 
 const settingsLinks: SidebarLink[] = [

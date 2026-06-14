@@ -18,12 +18,14 @@ function generateCode(): string {
 
 export async function GET(req: Request) {
   try {
-    const session = await auth();
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-    if (session.user.role !== "OWNER") {
-      return NextResponse.json({ error: "Only agency owners can manage registration codes." }, { status: 403 });
+    const adminUser = process.env.ADMIN_USERNAME || "admin";
+    const adminPass = process.env.ADMIN_PASSWORD || "sira-admin-secure-2026";
+
+    const reqUsername = req.headers.get("x-admin-username");
+    const reqPassword = req.headers.get("x-admin-password");
+
+    if (reqUsername !== adminUser || reqPassword !== adminPass) {
+      return NextResponse.json({ error: "Invalid admin credentials" }, { status: 401 });
     }
 
     const url = new URL(req.url);
@@ -61,12 +63,14 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
-    const session = await auth();
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-    if (session.user.role !== "OWNER") {
-      return NextResponse.json({ error: "Only agency owners can manage registration codes." }, { status: 403 });
+    const adminUser = process.env.ADMIN_USERNAME || "admin";
+    const adminPass = process.env.ADMIN_PASSWORD || "sira-admin-secure-2026";
+
+    const reqUsername = req.headers.get("x-admin-username");
+    const reqPassword = req.headers.get("x-admin-password");
+
+    if (reqUsername !== adminUser || reqPassword !== adminPass) {
+      return NextResponse.json({ error: "Invalid admin credentials" }, { status: 401 });
     }
 
     const body = await req.json().catch(() => ({}));

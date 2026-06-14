@@ -54,30 +54,46 @@ function extractMultilingualText(rawText: string) {
 
 // Amharic label words that appear on Ethiopian passports and should be filtered from name values
 const AMHARIC_LABEL_WORDS = new Set<string>([
-  "ስም", "የስም", "ስሙ", "ስሜ", "ስማ", "ስማቸው", // name / of-name / his-name / their-name
-  "አባት", "የአባት", "አባ", // father / of-father
-  "አያት", "የአያት", // grandfather / of-grandfather
-  "የመጀመሪያ", "መጀመሪያ", // first
-  "የተወለደበት", "ተወለደ", // place of birth
-  "ጾታ", // sex
-  "ዜግነት", "ዜጋ", // nationality
-  "የትውልድ", "ትውልድ", // origin
-  "ቀን", // date
-  "የጉዞ", // travel
-  "ሰነድ", // document
-  "የፓስፖርት", "ፓስፖርት", // passport
-  "ወር", "ዓመት", // month, year
-  "የምስል", "ምስል", // photo/picture
-  "የባለቤት", "ባለቤት", "የባለቤቱ", // spouse / bearer
-  "የተፈረመ", "ፊርማ", // signature
-  "ሙያ", "ሥራ", // occupation
-  "ቁጥር", // number
-  "ሀገር", "አገር", "የአገር", // country
-  "የሚያበቃበት", "የሚያበቃ", // expiry
-  "የተሰጠበት", "የተሰጠ", "የሰጠው", // issue / issued
-  "ባለስልጣን", "ኢሚግሬሽን", "ዋና", "መምሪያ", // authority / immigration / main / department
-  "ዓይነት", "ኮድ", "የግል", // type / code / personal
-  "ቦታ", // place
+  // Name labels
+  "ስም", "የስም", "ስሙ", "ስሜ", "ስማ", "ስማቸው", "ሙሉ", "ሙሉስም",
+  // Father / grandfather
+  "አባት", "የአባት", "አባ", "አያት", "የአያት",
+  // First / given
+  "የመጀመሪያ", "መጀመሪያ", "ትውልድ",
+  // Place of birth / origin
+  "የተወለደበት", "ተወለደ", "የትውልድ", "የትውልዴ",
+  // Sex / gender
+  "ጾታ", "ወንድ", "ሴት",
+  // Nationality / citizenship
+  "ዜግነት", "ዜጋ",
+  // Date / time markers
+  "ቀን", "ወር", "ዓመት", "ዕለት",
+  // Document / passport
+  "የጉዞ", "ሰነድ", "የፓስፖርት", "ፓስፖርት", "ቁጥር",
+  // Photo / image
+  "የምስል", "ምስል", "ፎቶ",
+  // Bearer / spouse
+  "የባለቤት", "ባለቤት", "የባለቤቱ", "ሃ/ጠባቂ",
+  // Signature
+  "የተፈረመ", "ፊርማ", "ፊርማ፡",
+  // Occupation / profession
+  "ሙያ", "ሥራ", "ሥራ፡",
+  // Country / region
+  "ሀገር", "አገር", "የአገር", "ክልል",
+  // Expiry
+  "የሚያበቃበት", "የሚያበቃ", "ያበቃበት",
+  // Issue
+  "የተሰጠበት", "የተሰጠ", "የሰጠው", "የተሰጠብ",
+  // Authority labels
+  "ባለስልጣን", "ኢሚግሬሽን", "ዋና", "መምሪያ", "ዳይሬክቶሬት", "ዋናዳይሬ",
+  // Type / code / personal
+  "ዓይነት", "ኮድ", "የግል",
+  // Place
+  "ቦታ",
+  // Common header words
+  "ኢትዮጵያ", "ፌዴራላዊ", "ሪፐብሊክ", "ዲሞክራሲያዊ",
+  // Page / observation
+  "ምልከታ", "አስተያየት",
 ]);
 
 // Ethiopic genitive prefix "የ" marks possessive label words (የስም, የአባት, የጉዞ ...).
@@ -744,17 +760,25 @@ async function parseWithGoogleVision(fileBuffer: Buffer): Promise<PassportOcrRes
   return parseRawPassportText("google", rawText, providerConfidence);
 }
 
-async function parseWithOcrSpace(fileBuffer: Buffer): Promise<PassportOcrResult> {
-  const apiKey = process.env.OCR_SPACE_API_KEY;
-  if (!apiKey) {
-    throw new Error("OCR.space is selected but OCR_SPACE_API_KEY is not configured.");
-  }
-
+/**
+ * Run a single OCR.space request and return the raw text.
+ * Engine 2 = fast English/Latin. Engine 3 = 200+ languages including Amharic.
+ */
+async function ocrSpaceRequest(
+  apiKey: string,
+  base64Image: string,
+  engine: "2" | "3",
+  language: string
+): Promise<string> {
   const formData = new FormData();
-  formData.append("base64Image", `data:image/jpeg;base64,${fileBuffer.toString("base64")}`);
-  formData.append("language", "eng");
+  formData.append("base64Image", base64Image);
+  formData.append("language", language);
   formData.append("isTable", "true");
-  formData.append("OCREngine", "2");
+  formData.append("OCREngine", engine);
+  // Engine 3 supports more layout types
+  if (engine === "3") {
+    formData.append("detectOrientation", "true");
+  }
 
   const response = await fetch("https://api.ocr.space/parse/image", {
     method: "POST",
@@ -763,16 +787,46 @@ async function parseWithOcrSpace(fileBuffer: Buffer): Promise<PassportOcrResult>
   });
 
   if (!response.ok) {
-    throw new Error(`OCR.space API error: ${response.status} - ${await response.text()}`);
+    throw new Error(`OCR.space API error (engine ${engine}/${language}): ${response.status} - ${await response.text()}`);
   }
 
   const data = await response.json();
   if (data.IsErroredOnProcessing || !data.ParsedResults?.length) {
-    throw new Error(data.ErrorMessage || "OCR.space failed to parse the image.");
+    // Non-fatal: some engines may fail on certain scripts, return empty
+    return "";
   }
 
-  const rawText = data.ParsedResults.map((result: any) => result.ParsedText).join("\n");
-  return parseRawPassportText("ocrspace", rawText, 0);
+  return (data.ParsedResults as any[]).map((r) => r.ParsedText).join("\n");
+}
+
+async function parseWithOcrSpace(fileBuffer: Buffer): Promise<PassportOcrResult> {
+  const apiKey = process.env.OCR_SPACE_API_KEY;
+  if (!apiKey) {
+    throw new Error("OCR.space is selected but OCR_SPACE_API_KEY is not configured.");
+  }
+
+  const base64Image = `data:image/jpeg;base64,${fileBuffer.toString("base64")}`;
+
+  // Run two passes in parallel:
+  //  - Engine 2 + English: best for Latin MRZ lines, passport numbers, and dates
+  //  - Engine 3 + Amharic: reads Ethiopic script for first/middle/last names
+  const [engText, amhText] = await Promise.allSettled([
+    ocrSpaceRequest(apiKey, base64Image, "2", "eng"),
+    ocrSpaceRequest(apiKey, base64Image, "3", "amh"),
+  ]);
+
+  const engResult = engText.status === "fulfilled" ? engText.value : "";
+  const amhResult = amhText.status === "fulfilled" ? amhText.value : "";
+
+  if (!engResult && !amhResult) {
+    throw new Error("OCR.space failed to parse the image on both passes.");
+  }
+
+  // Merge: put the Amharic pass first so name extraction sees Ethiopic tokens
+  // early, followed by the English pass which contains the MRZ.
+  const mergedText = [amhResult, engResult].filter(Boolean).join("\n\n--- English OCR Pass ---\n");
+
+  return parseRawPassportText("ocrspace", mergedText, 0);
 }
 
 export async function parsePassportOcr(fileBuffer: Buffer): Promise<PassportOcrResult> {
