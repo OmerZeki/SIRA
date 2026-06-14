@@ -20,12 +20,15 @@ A standalone Node.js/Express microservice deployed on Render that powers the **S
 - 📑 **Tawtheeq Musaned** — `tawtheeq.musaned.com.sa`
 - 🛂 **MOFA Enjaz** — `visa.mofa.gov.sa`
 - 🏢 **Tasheer** — `vc.tasheer.com`
-- ⚡ **Top Enjaz** — `enjaz-ui.onrender.com`
+- 🇸🇦 **Saudi HRSD** — `hrsd.gov.sa`
 - 🏥 **Wafid Medical** — `wafid.com`
+- ⚡ **EasyEnjaz** — `easyenjaz.net`
 - 🇦🇪 **UAE ICP** — `icp.gov.ae`
 - 🇰🇼 **Kuwait MOI** — `evisa.moi.gov.kw`
 - 🇶🇦 **Qatar Visa** — `moi.gov.qa`
 - 🇴🇲 **Oman eVisa** — `evisa.rop.gov.om`
+- 🇧🇭 **Bahrain eVisa** — `evisa.gov.bh`
+- 🇯🇴 **Jordan MOI eVisa** — `eservices.moi.gov.jo`
 
 ## Deploy to Render
 
