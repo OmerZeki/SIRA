@@ -8,8 +8,13 @@ Hardened and updated Portal Hub, SMTP config, and Admin codes panel successfully
 ### SIRA Dashboard & API Changes
 - **Portals Page Refinement (`src/app/(dashboard)/portals/page.tsx`)**:
   - Removed competitor portal `top_enjaz` from `PORTALS` registry.
-  - Registered new portals: `saudi_hrsd` (Saudi HRSD) and `bahrain_visa` (Bahrain eVisa).
+  - Registered new portals: `saudi_hrsd` (Saudi HRSD), `easyenjaz` (EasyEnjaz), `bahrain_visa` (Bahrain eVisa), and `jordan_moi` (Jordan MOI eVisa).
   - Redesigned the portals dashboard UI to match the "new portal" style: added visual scaling lift on hover, styling tags, custom tile outlines for icons, and smooth transitions.
+  - Updated Qatar Visa URL to active inquiries path.
+- **Proxy Server Upgrades (`sira-portals/server.js`)**:
+  - Implemented `<base href="TARGET_URL">` tag injection for all `text/html` responses inside `/proxy` to force relative assets (CSS, JS, images) to load directly from the source server.
+  - Added `rejectUnauthorized: false` for HTTPS proxy requests to resolve SSL/TSL handshake/certification verification errors (fixing Jordan MOI eVisa Bad Gateway).
+  - Updated Qatar Visa URL default path in `portals.js`, `.env.example`, `.env` and `render.yaml`.
 - **Admin Codes Hardening (`src/app/api/admin/codes/route.ts` & `src/app/(dashboard)/admin/codes/page.tsx`)**:
   - Modified the codes API route to validate `x-admin-username` and `x-admin-password` headers against environment variables `ADMIN_USERNAME` and `ADMIN_PASSWORD`.
   - Implemented a premium dark-canvas login card on the admin page to prompt for credentials, storing them in `sessionStorage` upon successful verification.
