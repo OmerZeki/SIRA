@@ -14,7 +14,7 @@ import {
   RefreshCw,
   Shield,
   Info,
-  ChevronRight,
+  Lock,
 } from "lucide-react";
 import { useCurrentLocale } from "@/components/sira/LanguageSwitcher";
 import { getDictionary } from "@/lib/i18n";
@@ -29,6 +29,7 @@ interface Portal {
   category: "ethiopia" | "saudi" | "gcc" | "medical";
   automatable: boolean;
   proxiable: boolean;
+  cfProtected?: boolean; // Portal uses Cloudflare/WAF — proxy will be blocked
   icon: string;
   description: string;
   color: string;
@@ -57,6 +58,7 @@ const PORTALS: Portal[] = [
     category: "saudi",
     automatable: true,
     proxiable: true,
+    cfProtected: true,
     icon: "📑",
     description: "Saudi HRSD domestic worker employment contract portal",
     color: "#166534",
@@ -96,6 +98,7 @@ const PORTALS: Portal[] = [
     category: "saudi",
     automatable: false,
     proxiable: true,
+    cfProtected: true,
     icon: "🇸🇦",
     description: "Ministry of Human Resources and Social Development portal for labor policies",
     color: "#15803d",
@@ -228,11 +231,47 @@ function PortalFrame({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
+  const [cfBlocked, setCfBlocked] = useState(false);
   const [screenshotUrl, setScreenshotUrl] = useState<string | null>(null);
   const [screenshotLoading, setScreenshotLoading] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
   const proxyUrl = `${PORTAL_SERVICE_URL}/proxy?url=${encodeURIComponent(portal.url)}`;
+
+  // Pre-check proxy: detect Cloudflare/WAF blocks before loading iframe
+  useEffect(() => {
+    let cancelled = false;
+    async function checkProxy() {
+      try {
+        const res = await fetch(proxyUrl, { method: "GET", signal: AbortSignal.timeout(12000) });
+        if (!res.ok) {
+          // Try to read JSON error body
+          try {
+            const data = await res.json();
+            if (!cancelled && data?.error === "cf_blocked") {
+              setCfBlocked(true);
+              setIsLoading(false);
+              return;
+            }
+          } catch {
+            // Not a JSON body — still show error
+          }
+          if (!cancelled) {
+            setHasError(true);
+            setIsLoading(false);
+          }
+        } else {
+          // Proxy is responding — let the iframe load normally
+          if (!cancelled) setIsLoading(true);
+        }
+      } catch {
+        // Network error — let iframe handle it
+      }
+    }
+    checkProxy();
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [proxyUrl]);
 
   const takeScreenshot = async () => {
     setScreenshotLoading(true);
@@ -252,8 +291,6 @@ function PortalFrame({
       setScreenshotLoading(false);
     }
   };
-
-  const height = isFullscreen ? "calc(100vh - 120px)" : "520px";
 
   return (
     <div
@@ -300,6 +337,7 @@ function PortalFrame({
             </button>
             <button
               onClick={() => {
+                setCfBlocked(false);
                 setIsLoading(true);
                 setHasError(false);
                 if (iframeRef.current) {
@@ -355,14 +393,56 @@ function PortalFrame({
 
         {/* iframe Content */}
         <div className="relative flex-1 overflow-hidden">
-          {isLoading && !hasError && (
+          {isLoading && !hasError && !cfBlocked && (
             <div className="absolute inset-0 flex flex-col items-center justify-center bg-surface-1 z-10 gap-3">
               <Loader2 className="w-8 h-8 text-primary animate-spin" />
               <p className="text-sm text-ink-subtle">Loading {portal.name}…</p>
               <p className="text-xs text-ink-tertiary">Via SIRA proxy service</p>
             </div>
           )}
-          {hasError && (
+
+          {/* Cloudflare / WAF Blocked State */}
+          {cfBlocked && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-surface-1 z-10 gap-5 p-8">
+              <div className="p-4 rounded-full bg-warning/10 border border-warning/20">
+                <Shield className="w-8 h-8 text-warning" />
+              </div>
+              <div className="text-center space-y-2 max-w-md">
+                <p className="text-sm font-semibold text-ink">{portal.name} is protected by Cloudflare</p>
+                <p className="text-xs text-ink-subtle leading-relaxed">
+                  This portal uses Cloudflare WAF protection and blocks automated proxy requests from server IPs.
+                  You need to open it directly in your browser where your IP and cookies are trusted.
+                </p>
+              </div>
+              <div className="flex gap-3 flex-wrap justify-center">
+                <button
+                  onClick={() => window.open(portal.url, "_blank")}
+                  className="btn-primary flex items-center gap-2 text-sm px-5 py-2.5"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                  Open {portal.name} Directly
+                </button>
+                <button
+                  onClick={takeScreenshot}
+                  disabled={screenshotLoading}
+                  className="btn-secondary flex items-center gap-2 text-sm px-4 py-2.5"
+                >
+                  {screenshotLoading ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Camera className="w-4 h-4" />
+                  )}
+                  Playwright Screenshot
+                </button>
+              </div>
+              <p className="text-[10px] text-ink-tertiary text-center">
+                URL: <span className="font-mono">{portal.url}</span>
+              </p>
+            </div>
+          )}
+
+          {/* Generic Error State */}
+          {hasError && !cfBlocked && (
             <div className="absolute inset-0 flex flex-col items-center justify-center bg-surface-1 z-10 gap-4">
               <div className="p-4 rounded-full bg-error/10 border border-error/20">
                 <AlertCircle className="w-8 h-8 text-error" />
@@ -396,18 +476,21 @@ function PortalFrame({
               </div>
             </div>
           )}
-          <iframe
-            ref={iframeRef}
-            src={proxyUrl}
-            title={portal.name}
-            className="w-full h-full border-0"
-            onLoad={() => setIsLoading(false)}
-            onError={() => {
-              setIsLoading(false);
-              setHasError(true);
-            }}
-            sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-top-navigation"
-          />
+
+          {!cfBlocked && (
+            <iframe
+              ref={iframeRef}
+              src={proxyUrl}
+              title={portal.name}
+              className="w-full h-full border-0"
+              onLoad={() => setIsLoading(false)}
+              onError={() => {
+                setIsLoading(false);
+                setHasError(true);
+              }}
+              sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-top-navigation"
+            />
+          )}
         </div>
       </div>
     </div>
@@ -468,17 +551,22 @@ function PortalCard({
 
         {/* Status indicators */}
         <div className="flex flex-wrap gap-1.5">
-          {portal.proxiable && (
+          {portal.cfProtected ? (
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-warning/8 border border-warning/25 text-warning font-medium flex items-center gap-1">
+              <Lock className="w-2.5 h-2.5" />
+              CF Protected
+            </span>
+          ) : portal.proxiable ? (
             <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/5 border border-primary/15 text-primary/80 font-medium">
               Proxy iframe
             </span>
-          )}
+          ) : null}
           {portal.automatable && (
             <span className="text-[10px] px-1.5 py-0.5 rounded bg-success/5 border border-success/15 text-success font-medium">
               Playwright
             </span>
           )}
-          {portal.category === "saudi" && !portal.automatable && (
+          {portal.category === "saudi" && !portal.automatable && !portal.cfProtected && (
             <span className="text-[10px] px-1.5 py-0.5 rounded bg-warning/5 border border-warning/15 text-warning font-medium">
               B2B Required
             </span>
@@ -490,10 +578,18 @@ function PortalCard({
       <div className="px-5 pb-4 flex gap-2">
         <button
           onClick={() => onOpen(portal)}
-          className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold rounded-lg border border-primary/30 bg-primary/5 text-primary hover:bg-primary/10 hover:border-primary/50 transition-all duration-150"
+          className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold rounded-lg border transition-all duration-150 ${
+            portal.cfProtected
+              ? "border-warning/30 bg-warning/5 text-warning hover:bg-warning/10 hover:border-warning/50"
+              : "border-primary/30 bg-primary/5 text-primary hover:bg-primary/10 hover:border-primary/50"
+          }`}
         >
-          <Globe className="w-3.5 h-3.5" />
-          Open in Hub
+          {portal.cfProtected ? (
+            <Shield className="w-3.5 h-3.5" />
+          ) : (
+            <Globe className="w-3.5 h-3.5" />
+          )}
+          {portal.cfProtected ? "Open (CF Blocked)" : "Open in Hub"}
         </button>
         <button
           onClick={() => window.open(portal.url, "_blank")}

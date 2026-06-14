@@ -86,6 +86,35 @@ const STRIP_HEADERS = new Set([
   "x-content-type-options",
 ]);
 
+// Cloudflare / WAF block detection patterns
+const CF_SIGNATURES = [
+  "cloudflare",
+  "cf-ray",
+  "attention required",
+  "sorry, you have been blocked",
+  "enable javascript and cookies",
+  "please turn javascript on",
+  "_cf_chl",
+  "challenge-platform",
+  "just a moment",
+  "ddos-guard",
+  "akamai",
+  "incapsula",
+];
+
+function isCloudflareBlock(statusCode, headers, body) {
+  // Server-level block signals
+  const cfRay = headers["cf-ray"] || headers["server"] || "";
+  if (cfRay.toLowerCase().includes("cloudflare")) return true;
+  if (statusCode === 403 || statusCode === 429) return true;
+  // Body-level detection
+  if (body) {
+    const lower = body.toLowerCase();
+    return CF_SIGNATURES.some((sig) => lower.includes(sig));
+  }
+  return false;
+}
+
 app.get("/proxy", (req, res) => {
   const rawUrl = req.query.url;
   if (!rawUrl) return res.status(400).json({ error: "Missing ?url parameter" });
@@ -111,15 +140,25 @@ app.get("/proxy", (req, res) => {
     path: target.pathname + target.search,
     method: "GET",
     headers: {
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0 Safari/537.36",
-      "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-      "Accept-Language": "en-US,en;q=0.9,am;q=0.8,ar;q=0.7",
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+      "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+      "Accept-Language": "en-US,en;q=0.9",
       "Accept-Encoding": "identity",
+      "Cache-Control": "no-cache",
+      "Pragma": "no-cache",
+      "Sec-Ch-Ua": '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
+      "Sec-Ch-Ua-Mobile": "?0",
+      "Sec-Ch-Ua-Platform": '"Windows"',
+      "Sec-Fetch-Dest": "document",
+      "Sec-Fetch-Mode": "navigate",
+      "Sec-Fetch-Site": "none",
+      "Upgrade-Insecure-Requests": "1",
     },
+    timeout: 15000,
   };
 
   if (target.protocol === "https:") {
-    requestOptions.rejectUnauthorized = false; // Bypass Jordan MOI eVisa SSL verification error
+    requestOptions.rejectUnauthorized = false;
   }
 
   const proxyReq = lib.request(
@@ -127,6 +166,7 @@ app.get("/proxy", (req, res) => {
     (proxyRes) => {
       const contentType = proxyRes.headers["content-type"] || "";
       const isHtml = contentType.toLowerCase().includes("text/html");
+      const statusCode = proxyRes.statusCode || 200;
 
       if (isHtml) {
         let body = "";
@@ -134,8 +174,17 @@ app.get("/proxy", (req, res) => {
           body += chunk.toString("utf8");
         });
         proxyRes.on("end", () => {
-          const baseHref = target.origin + target.pathname;
+          // Detect Cloudflare / WAF block before serving
+          if (isCloudflareBlock(statusCode, proxyRes.headers, body)) {
+            console.warn(`[proxy] Cloudflare/WAF block detected for ${rawUrl} (status ${statusCode})`);
+            return res.status(403).json({
+              error: "cf_blocked",
+              message: "This portal is protected by Cloudflare or a WAF and cannot be embedded via proxy. Use the direct link to open it in a new tab.",
+              directUrl: rawUrl,
+            });
+          }
 
+          const baseHref = target.origin + target.pathname;
           let modifiedHtml = body;
           const headTag = "<head>";
           const headIndex = body.toLowerCase().indexOf(headTag);
@@ -156,10 +205,20 @@ app.get("/proxy", (req, res) => {
           filteredHeaders["x-frame-options"] = "ALLOWALL";
           filteredHeaders["access-control-allow-origin"] = "*";
 
-          res.writeHead(proxyRes.statusCode || 200, filteredHeaders);
+          res.writeHead(statusCode, filteredHeaders);
           res.end(modifiedHtml);
         });
       } else {
+        // Non-HTML: check status for blocks
+        if (statusCode === 403 || statusCode === 429) {
+          console.warn(`[proxy] HTTP ${statusCode} for non-HTML response from ${rawUrl}`);
+          return res.status(403).json({
+            error: "cf_blocked",
+            message: "Portal blocked the proxy request. Open it directly in a new tab.",
+            directUrl: rawUrl,
+          });
+        }
+
         const filteredHeaders = {};
         for (const [k, v] of Object.entries(proxyRes.headers)) {
           if (!STRIP_HEADERS.has(k.toLowerCase())) {
@@ -169,13 +228,18 @@ app.get("/proxy", (req, res) => {
         filteredHeaders["x-frame-options"] = "ALLOWALL";
         filteredHeaders["access-control-allow-origin"] = "*";
 
-        res.writeHead(proxyRes.statusCode || 200, filteredHeaders);
+        res.writeHead(statusCode, filteredHeaders);
         pipeline(proxyRes, res, (err) => {
           if (err) console.error("[proxy] pipeline error:", err.message);
         });
       }
     }
   );
+
+  proxyReq.on("timeout", () => {
+    proxyReq.destroy();
+    if (!res.headersSent) res.status(504).json({ error: "Gateway timeout: portal did not respond in time" });
+  });
 
   proxyReq.on("error", (err) => {
     console.error("[proxy] request error:", err.message);
